@@ -1,5 +1,8 @@
 __author__ = 'alexisgallepe'
 
+import os
+import os.path
+
 import piece
 import bitstring
 import logging
@@ -19,6 +22,8 @@ class PiecesManager(object):
             id_piece = file['idPiece']
             self.pieces[id_piece].files.append(file)
 
+        self.load_file_from_storage()
+
         # events
         pub.subscribe(self.receive_block_piece, 'PiecesManager.Piece')
         pub.subscribe(self.update_bitfield, 'PiecesManager.PieceCompleted')
@@ -36,8 +41,7 @@ class PiecesManager(object):
 
         if self.pieces[piece_index].are_all_blocks_full():
             if self.pieces[piece_index].set_to_full():
-                self.complete_pieces +=1
-
+                self.complete_pieces += 1
 
     def get_block(self, piece_index, block_offset, block_length):
         for piece in self.pieces:
@@ -111,3 +115,16 @@ class PiecesManager(object):
 
                 files.append(file)
         return files
+
+    def load_file_from_storage(self):
+        for file in self.files:
+            id_piece = file['idPiece']
+            file_path = file["path"]
+
+            if os.path.exists(file_path):
+                with open(file_path, "rb") as file_reader:
+                    for piece_for_file in self.pieces[id_piece].files:
+                        piece_data = file_reader.read(piece_for_file["length"])
+                        self.receive_block_piece((piece_for_file["idPiece"], piece_for_file["pieceOffset"], piece_data))
+
+

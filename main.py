@@ -1,6 +1,6 @@
 from block import State
 
-__author__ = 'alexisgallepe'
+__author__ = 'dl591'
 
 import time
 import peers_manager
@@ -8,26 +8,32 @@ import pieces_manager
 import torrent
 import tracker
 import logging
-import os
 import message
+import os.path
 
 
 class Run(object):
     percentage_completed = -1
     last_log_line = ""
 
-    def __init__(self):
-        self.torrent = torrent.Torrent().load_from_path("torrent.torrent")
-        self.tracker = tracker.Tracker(self.torrent)
+    def __init__(self, logger):
+        self.__logger = logger
 
-        self.pieces_manager = pieces_manager.PiecesManager(self.torrent)
-        self.peers_manager = peers_manager.PeersManager(self.torrent, self.pieces_manager)
+        try:
+            self.torrent = torrent.Torrent().load_from_path("public_file_1.txt.torrent")
+            self.tracker = tracker.Tracker(self.torrent)
 
-        self.peers_manager.start()
-        logging.info("PeersManager Started")
-        logging.info("PiecesManager Started")
+            self.pieces_manager = pieces_manager.PiecesManager(self.torrent)
+            self.peers_manager = peers_manager.PeersManager(self.torrent, self.pieces_manager)
+        except Exception as e:
+            self.__logger.error("Failed to load torrent_3.torrent", exc_info=e)
+            exit(-1)
 
     def start(self):
+        self.peers_manager.start()
+        self.__logger.info("PeersManager Started")
+        self.__logger.info("PiecesManager Started")
+
         peers_dict = self.tracker.get_peers_from_trackers()
         self.peers_manager.add_peers(peers_dict.values())
 
@@ -55,6 +61,7 @@ class Run(object):
 
                 piece_index, block_offset, block_length = data
                 piece_data = message.Request(piece_index, block_offset, block_length).to_bytes()
+                print("send " + str(message.Request(piece_index, block_offset, block_length)))
                 peer.send_to_peer(piece_data)
 
             self.display_progression()
@@ -62,9 +69,21 @@ class Run(object):
             time.sleep(0.1)
 
         logging.info("File(s) downloaded successfully.")
+
+        while True:
+            time.sleep(1)
+
         self.display_progression()
 
         self._exit_threads()
+
+    def start_seed_only(self):
+        self.peers_manager.start()
+        self.__logger.info("PeersManager Started")
+        self.__logger.info("PiecesManager Started")
+
+        while True:
+            time.sleep(10000)
 
     def display_progression(self):
         new_progression = 0
@@ -92,11 +111,12 @@ class Run(object):
 
     def _exit_threads(self):
         self.peers_manager.is_active = False
-        os._exit(0)
+        exit(0)
 
 
 if __name__ == '__main__':
     logging.basicConfig(level=logging.DEBUG)
+    main_logger = logging.getLogger()
 
-    run = Run()
+    run = Run(main_logger)
     run.start()

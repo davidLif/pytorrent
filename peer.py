@@ -9,6 +9,7 @@ from pubsub import pub
 import logging
 
 import message
+from bitstring import BitArray
 
 
 class Peer(object):
@@ -86,12 +87,15 @@ class Peer(object):
         logging.debug('handle_unchoke - %s' % self.ip)
         self.state['peer_choking'] = False
 
+
     def handle_interested(self):
         logging.debug('handle_interested - %s' % self.ip)
         self.state['peer_interested'] = True
 
         if self.am_choking():
+            self.state['am_choking'] = False
             unchoke = message.UnChoke().to_bytes()
+            print("send " + str(message.UnChoke()))
             self.send_to_peer(unchoke)
 
     def handle_not_interested(self):
@@ -107,6 +111,7 @@ class Peer(object):
 
         if self.is_choking() and not self.state['am_interested']:
             interested = message.Interested().to_bytes()
+            print("send " + str(message.Interested()))
             self.send_to_peer(interested)
             self.state['am_interested'] = True
 
@@ -121,6 +126,7 @@ class Peer(object):
 
         if self.is_choking() and not self.state['am_interested']:
             interested = message.Interested().to_bytes()
+            print("send " + str(message.Interested()))
             self.send_to_peer(interested)
             self.state['am_interested'] = True
 
@@ -131,8 +137,8 @@ class Peer(object):
         :type request: message.Request
         """
         logging.debug('handle_request - %s' % self.ip)
-        if self.is_interested() and self.is_unchoked():
-            pub.sendMessage('PiecesManager.PeerRequestsPiece', request=request, peer=self)
+        if self.is_interested() and self.am_unchoking():
+            pub.sendMessage('PeersManager.PeerRequestsPiece', request=request, peer=self)
 
     def handle_piece(self, message):
         """
@@ -152,6 +158,11 @@ class Peer(object):
             self.has_handshaked = True
             self.read_buffer = self.read_buffer[handshake_message.total_length:]
             logging.debug('handle_handshake - %s' % self.ip)
+
+            bitArr = BitArray(1)
+            bitArr[0] = True
+            self.send_to_peer(message.BitField(bitArr).to_bytes())
+            print("send " + str(message.BitField(bitArr)))
             return True
 
         except Exception:

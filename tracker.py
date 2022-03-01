@@ -82,11 +82,13 @@ class Tracker(object):
             'downloaded': 0,
             'port': 6881,
             'left': torrent.total_length,
+            'compact': 0,
             'event': 'started'
         }
 
         try:
             answer_tracker = requests.get(tracker, params=params, timeout=5)
+
             list_peers = bdecode(answer_tracker.content)
             offset=0
             if not type(list_peers['peers']) == dict:

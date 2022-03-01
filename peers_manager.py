@@ -34,9 +34,12 @@ class PeersManager(Thread):
 
         piece_index, block_offset, block_length = request.piece_index, request.block_offset, request.block_length
 
+        logging.info("Peer requested piece index {}. peer : {}".format(request.piece_index, peer.ip))
+
         block = self.pieces_manager.get_block(piece_index, block_offset, block_length)
         if block:
-            piece = message.Piece(piece_index, block_offset, block_length, block).to_bytes()
+            piece = message.Piece(block_length, piece_index, block_offset, block).to_bytes()
+            print("send " + str(message.Piece(block_length, piece_index, block_offset, block)))
             peer.send_to_peer(piece)
             logging.info("Sent piece index {} to peer : {}".format(request.piece_index, peer.ip))
 
@@ -110,13 +113,16 @@ class PeersManager(Thread):
                     continue
 
                 peer.read_buffer += payload
+                print(peer.read_buffer)
 
                 for message in peer.get_messages():
+                    print("Received " + str(message))
                     self._process_new_message(message, peer)
 
     def _do_handshake(self, peer):
         try:
             handshake = message.Handshake(self.torrent.info_hash)
+            print("send " + str(handshake))
             peer.send_to_peer(handshake.to_bytes())
             logging.info("new peer added : %s" % peer.ip)
             return True
