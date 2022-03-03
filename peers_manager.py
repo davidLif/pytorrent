@@ -34,7 +34,8 @@ class PeersManager(Thread):
 
         piece_index, block_offset, block_length = request.piece_index, request.block_offset, request.block_length
 
-        logging.info("Peer requested piece index {}. peer : {}".format(request.piece_index, peer.ip))
+        logging.info("Peer requested piece index {}, block offset {}, block length {}. peer : {}".format(
+            piece_index, block_offset, block_length, peer.ip))
 
         block = self.pieces_manager.get_block(piece_index, block_offset, block_length)
         if block:

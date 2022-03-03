@@ -28,6 +28,7 @@ class SockAddr:
 
 class Tracker(object):
     def __init__(self, torrent):
+        self.torrent_pieces = []
         self.torrent = torrent
         self.threads_list = []
         self.connected_peers = {}
@@ -66,13 +67,15 @@ class Tracker(object):
             if len(self.connected_peers) >= MAX_PEERS_CONNECTED:
                 break
 
-            new_peer = peer.Peer(int(self.torrent.number_of_pieces), sock_addr.ip, sock_addr.port)
+            new_peer = peer.Peer(self.torrent, self.torrent_pieces, sock_addr.ip, sock_addr.port)
             if not new_peer.connect():
                 continue
 
             logging.debug('Connected to %d/%d peers' % (len(self.connected_peers), MAX_PEERS_CONNECTED))
 
             self.connected_peers[new_peer.__hash__()] = new_peer
+
+        self.dict_sock_addr = {}
 
     def http_scraper(self, torrent, tracker):
         params = {
@@ -108,11 +111,13 @@ class Tracker(object):
                     port = struct.unpack_from("!H",list_peers['peers'], offset)[0]
                     offset += 2
                     s = SockAddr(ip,port)
-                    self.dict_sock_addr[s.__hash__()] = s
+                    if s.__hash__() not in self.dict_sock_addr.keys():
+                        self.dict_sock_addr[s.__hash__()] = s
             else:
                 for p in list_peers['peers']:
                     s = SockAddr(p['ip'], p['port'])
-                    self.dict_sock_addr[s.__hash__()] = s
+                    if s.__hash__() not in self.dict_sock_addr.keys():
+                        self.dict_sock_addr[s.__hash__()] = s
 
         except Exception as e:
             logging.exception("HTTP scraping failed: %s" % e.__str__())
@@ -180,3 +185,6 @@ class Tracker(object):
             logging.error("Transaction or Action ID did not match")
 
         return response
+
+    def set_pieces_manager(self, pieces_mng):
+        self.torrent_pieces = pieces_mng.pieces

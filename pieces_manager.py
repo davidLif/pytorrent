@@ -43,6 +43,19 @@ class PiecesManager(object):
             if self.pieces[piece_index].set_to_full():
                 self.complete_pieces += 1
 
+    def receive_full_piece(self, piece):
+        piece_index, _, piece_data = piece
+
+        if self.pieces[piece_index].is_full:
+            return
+
+        self.pieces[piece_index].set_full_piece(piece_data)
+
+        if self.pieces[piece_index].are_all_blocks_full():
+            if self.pieces[piece_index].set_to_full():
+                self.complete_pieces += 1
+
+
     def get_block(self, piece_index, block_offset, block_length):
         for piece in self.pieces:
             if piece_index == piece.piece_index:
@@ -117,14 +130,20 @@ class PiecesManager(object):
         return files
 
     def try_load_file_from_storage(self):
-        for file in self.files:
-            id_piece = file['idPiece']
-            file_path = file["path"]
+        file_reader = None
+        for piece_for_file in self.files:
+            id_piece = piece_for_file['idPiece']
+            file_path = piece_for_file["path"]
+            file_index = piece_for_file["fileOffset"]
 
             if os.path.exists(file_path):
-                with open(file_path, "rb") as file_reader:
-                    for piece_for_file in self.pieces[id_piece].files:
-                        piece_data = file_reader.read(piece_for_file["length"])
-                        self.receive_block_piece((piece_for_file["idPiece"], piece_for_file["pieceOffset"], piece_data))
+                if not file_reader:
+                    file_reader = open(file_path, "rb")
+                file_reader.seek(file_index)
+
+                piece_data = file_reader.read(piece_for_file["length"])
+                self.receive_full_piece((piece_for_file["idPiece"], piece_for_file["pieceOffset"], piece_data))
+        if file_reader:
+            file_reader.close()
 
 

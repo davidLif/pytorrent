@@ -1,3 +1,4 @@
+import threading
 import time
 
 __author__ = 'dl591'
@@ -13,16 +14,19 @@ from bitstring import BitArray
 
 
 class Peer(object):
-    def __init__(self, number_of_pieces, ip, port=6881):
+    def __init__(self, related_torrent_obj, torrent_pieces_array, ip, port=6881):
         self.last_call = 0.0
         self.has_handshaked = False
         self.healthy = False
         self.read_buffer = b''
         self.socket = None
+        self.socket_lock = threading.Lock()
         self.ip = ip
         self.port = port
-        self.number_of_pieces = number_of_pieces
-        self.bit_field = bitstring.BitArray(number_of_pieces)
+        self.torrent_pieces_array = torrent_pieces_array
+        self.related_torrent_obj = related_torrent_obj
+        self.number_of_pieces = int(related_torrent_obj.number_of_pieces)
+        self.bit_field = bitstring.BitArray(self.number_of_pieces)
         self.state = {
             'am_choking': True,
             'am_interested': False,
@@ -47,12 +51,18 @@ class Peer(object):
         return True
 
     def send_to_peer(self, msg):
+        # TODO: Handle socket overload - better!
         try:
+            self.socket_lock.acquire()
+            if time.time() - self.last_call < 0.01:
+                time.sleep(0.01)
             self.socket.send(msg)
             self.last_call = time.time()
         except Exception as e:
             self.healthy = False
-            logging.error("Failed to send to peer : %s" % e.__str__())
+            logging.error("Failed to send to peer : %s" % e.__str__(), exc_info=e)
+        finally:
+            self.socket_lock.release()
 
     def is_eligible(self):
         now = time.time()
@@ -158,10 +168,18 @@ class Peer(object):
             self.read_buffer = self.read_buffer[handshake_message.total_length:]
             logging.debug('handle_handshake - %s' % self.ip)
 
-            bitArr = BitArray(1)
-            bitArr[0] = True
-            self.send_to_peer(message.BitField(bitArr).to_bytes())
-            logging.debug("Sent " + str(message.BitField(bitArr)))
+            if handshake_message.info_hash != self.related_torrent_obj.info_hash:
+                raise AssertionError("Handshake info hash is different then"
+                                     " the related torrent object info hash. {} {}".format(
+                    str(handshake_message.info_hash), str(self.related_torrent_obj.info_hash)))
+
+            bit_field_array = BitArray(len(self.torrent_pieces_array))
+            for piece_index in range(len(self.torrent_pieces_array)):
+                piece = self.torrent_pieces_array[piece_index]
+                bit_field_array[piece_index] = piece.is_full
+            self.send_to_peer(message.BitField(bit_field_array).to_bytes())
+            logging.debug("Sent " + str(message.BitField(bit_field_array)))
+
             return True
 
         except Exception:

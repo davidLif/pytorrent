@@ -47,7 +47,7 @@ class Torrent(object):
 
         if 'files' in self.torrent_file['info']:
             if not os.path.exists(root):
-                os.mkdir(root, 0o0766 )
+                os.mkdir(root, 0o0766)
 
             for file in self.torrent_file['info']['files']:
                 path_file = os.path.join(root, *file["path"])
