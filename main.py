@@ -9,7 +9,6 @@ import torrent
 import tracker
 import logging
 import message
-import os.path
 
 
 class Run(object):
@@ -18,6 +17,7 @@ class Run(object):
 
     def __init__(self, logger):
         self.__logger = logger
+        self.__seed_file_forever = True
 
         try:
             self.torrent = torrent.Torrent().load_from_path("public_file_1.txt.torrent")
@@ -70,12 +70,16 @@ class Run(object):
 
         logging.info("File(s) downloaded successfully.")
 
-        while True:
-            time.sleep(1)
-
         self.display_progression()
 
-        self._exit_threads()
+        # Exit program or continue seeding the file
+        try:
+            while self.__seed_file_forever:
+                time.sleep(1)
+        except KeyboardInterrupt:
+            pass  # Shutdown request
+        finally:
+            self._exit_threads()
 
     def start_seed_only(self):
         self.peers_manager.start()
