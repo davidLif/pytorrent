@@ -61,7 +61,7 @@ class Run(object):
 
                 piece_index, block_offset, block_length = data
                 piece_data = message.Request(piece_index, block_offset, block_length).to_bytes()
-                print("send " + str(message.Request(piece_index, block_offset, block_length)))
+                logging.debug("Sent " + str(message.Request(piece_index, block_offset, block_length)))
                 peer.send_to_peer(piece_data)
 
             self.display_progression()
@@ -108,7 +108,7 @@ class Run(object):
                                                                                          self.pieces_manager.complete_pieces,
                                                                                          self.pieces_manager.number_of_pieces)
         if current_log_line != self.last_log_line:
-            print(current_log_line)
+            logging.debug(current_log_line)
 
         self.last_log_line = current_log_line
         self.percentage_completed = new_progression

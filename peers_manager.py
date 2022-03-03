@@ -39,7 +39,7 @@ class PeersManager(Thread):
         block = self.pieces_manager.get_block(piece_index, block_offset, block_length)
         if block:
             piece = message.Piece(block_length, piece_index, block_offset, block).to_bytes()
-            print("send " + str(message.Piece(block_length, piece_index, block_offset, block)))
+            logging.debug("Sent " + str(message.Piece(block_length, piece_index, block_offset, block)))
             peer.send_to_peer(piece)
             logging.info("Sent piece index {} to peer : {}".format(request.piece_index, peer.ip))
 
@@ -86,7 +86,7 @@ class PeersManager(Thread):
             except socket.error as e:
                 err = e.args[0]
                 if err != errno.EAGAIN or err != errno.EWOULDBLOCK:
-                    logging.debug("Wrong errno {}".format(err))
+                    logging.error("Wrong errno {}".format(err))
                 break
             except Exception:
                 logging.exception("Recv failed")
@@ -113,16 +113,16 @@ class PeersManager(Thread):
                     continue
 
                 peer.read_buffer += payload
-                print(peer.read_buffer)
+                logging.debug(peer.read_buffer)
 
                 for message in peer.get_messages():
-                    print("Received " + str(message))
+                    logging.debug("Received " + str(message))
                     self._process_new_message(message, peer)
 
     def _do_handshake(self, peer):
         try:
             handshake = message.Handshake(self.torrent.info_hash)
-            print("send " + str(handshake))
+            logging.debug("Sent " + str(handshake))
             peer.send_to_peer(handshake.to_bytes())
             logging.info("new peer added : %s" % peer.ip)
             return True
@@ -137,7 +137,7 @@ class PeersManager(Thread):
             if self._do_handshake(peer):
                 self.peers.append(peer)
             else:
-                print("Error _do_handshake")
+                logging.error("Error _do_handshake")
 
     def remove_peer(self, peer):
         if peer in self.peers:

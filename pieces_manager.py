@@ -22,7 +22,7 @@ class PiecesManager(object):
             id_piece = file['idPiece']
             self.pieces[id_piece].files.append(file)
 
-        self.load_file_from_storage()
+        self.try_load_file_from_storage()
 
         # events
         pub.subscribe(self.receive_block_piece, 'PiecesManager.Piece')
@@ -116,7 +116,7 @@ class PiecesManager(object):
                 files.append(file)
         return files
 
-    def load_file_from_storage(self):
+    def try_load_file_from_storage(self):
         for file in self.files:
             id_piece = file['idPiece']
             file_path = file["path"]

@@ -1,6 +1,6 @@
 import time
 
-__author__ = 'alexisgallepe'
+__author__ = 'dl591'
 
 import socket
 import struct
@@ -41,7 +41,7 @@ class Peer(object):
             self.healthy = True
 
         except Exception as e:
-            print("Failed to connect to peer (ip: %s - port: %s - %s)" % (self.ip, self.port, e.__str__()))
+            logging.warning("Failed to connect to peer (ip: %s - port: %s - %s)" % (self.ip, self.port, e.__str__()))
             return False
 
         return True
@@ -87,7 +87,6 @@ class Peer(object):
         logging.debug('handle_unchoke - %s' % self.ip)
         self.state['peer_choking'] = False
 
-
     def handle_interested(self):
         logging.debug('handle_interested - %s' % self.ip)
         self.state['peer_interested'] = True
@@ -95,7 +94,7 @@ class Peer(object):
         if self.am_choking():
             self.state['am_choking'] = False
             unchoke = message.UnChoke().to_bytes()
-            print("send " + str(message.UnChoke()))
+            logging.debug("Sent " + str(message.UnChoke()))
             self.send_to_peer(unchoke)
 
     def handle_not_interested(self):
@@ -111,7 +110,7 @@ class Peer(object):
 
         if self.is_choking() and not self.state['am_interested']:
             interested = message.Interested().to_bytes()
-            print("send " + str(message.Interested()))
+            logging.debug("Sent " + str(message.Interested()))
             self.send_to_peer(interested)
             self.state['am_interested'] = True
 
@@ -126,7 +125,7 @@ class Peer(object):
 
         if self.is_choking() and not self.state['am_interested']:
             interested = message.Interested().to_bytes()
-            print("send " + str(message.Interested()))
+            logging.debug("Sent " + str(message.Interested()))
             self.send_to_peer(interested)
             self.state['am_interested'] = True
 
@@ -162,7 +161,7 @@ class Peer(object):
             bitArr = BitArray(1)
             bitArr[0] = True
             self.send_to_peer(message.BitField(bitArr).to_bytes())
-            print("send " + str(message.BitField(bitArr)))
+            logging.debug("Sent " + str(message.BitField(bitArr)))
             return True
 
         except Exception:

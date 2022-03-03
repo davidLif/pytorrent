@@ -70,7 +70,7 @@ class Tracker(object):
             if not new_peer.connect():
                 continue
 
-            print('Connected to %d/%d peers' % (len(self.connected_peers), MAX_PEERS_CONNECTED))
+            logging.debug('Connected to %d/%d peers' % (len(self.connected_peers), MAX_PEERS_CONNECTED))
 
             self.connected_peers[new_peer.__hash__()] = new_peer
 
@@ -154,7 +154,7 @@ class Tracker(object):
             if sock_addr.__hash__() not in self.dict_sock_addr:
                 self.dict_sock_addr[sock_addr.__hash__()] = sock_addr
 
-        print("Got %d peers" % len(self.dict_sock_addr))
+        logging.debug("Got %d peers" % len(self.dict_sock_addr))
 
     def send_message(self, conn, sock, tracker_message):
         message = tracker_message.to_bytes()
@@ -167,16 +167,16 @@ class Tracker(object):
         try:
             response = PeersManager._read_from_socket(sock)
         except socket.timeout as e:
-            logging.debug("Timeout : %s" % e)
+            logging.warning("Timeout : %s" % e)
             return
         except Exception as e:
             logging.exception("Unexpected error when sending message : %s" % e.__str__())
             return
 
         if len(response) < size:
-            logging.debug("Did not get full message.")
+            logging.warning("Did not get full message.")
 
         if action != response[0:4] or trans_id != response[4:8]:
-            logging.debug("Transaction or Action ID did not match")
+            logging.error("Transaction or Action ID did not match")
 
         return response
