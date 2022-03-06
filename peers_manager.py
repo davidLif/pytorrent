@@ -15,11 +15,12 @@ import random
 
 
 class PeersManager(Thread):
-    def __init__(self, torrent, pieces_manager):
+    def __init__(self, torrent, pieces_manager, peer_tracker):
         Thread.__init__(self)
         self.peers = []
         self.torrent = torrent
         self.pieces_manager = pieces_manager
+        self.peer_tracker = peer_tracker
         self.rarest_pieces = rarest_piece.RarestPieces(pieces_manager)
         self.pieces_by_peer = [[0, []] for _ in range(pieces_manager.number_of_pieces)]
         self.is_active = True
@@ -145,9 +146,10 @@ class PeersManager(Thread):
             try:
                 peer.socket.close()
             except Exception:
-                logging.exception("")
+                logging.exception("Falied to close connection on removed peer {}".format(str(peer.ip)))
 
             self.peers.remove(peer)
+            self.peer_tracker.remove_disconnected_peer(peer)
 
         #for rarest_piece in self.rarest_pieces.rarest_pieces:
         #    if peer in rarest_piece["peers"]:

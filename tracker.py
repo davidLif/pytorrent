@@ -32,11 +32,12 @@ class Tracker(object):
         self.torrent = torrent
         self.threads_list = []
         self.connected_peers = {}
-        self.dict_sock_addr = {}
+        self.dict_sock_addr_try_connect = {}
+        self.dict_sock_addr_connected = set()
 
     def get_peers_from_trackers(self):
         for i, tracker in enumerate(self.torrent.announce_list):
-            if len(self.dict_sock_addr) >= MAX_PEERS_TRY_CONNECT:
+            if len(self.dict_sock_addr_try_connect) >= MAX_PEERS_TRY_CONNECT:
                 break
 
             tracker_url = tracker[0]
@@ -56,14 +57,15 @@ class Tracker(object):
             else:
                 logging.error("unknown scheme for: %s " % tracker_url)
 
-        self.try_peer_connect()
+        newly_connected_peers = self.try_peer_connect()
 
-        return self.connected_peers
+        return newly_connected_peers
 
     def try_peer_connect(self):
-        logging.info("Trying to connect to %d peer(s)" % len(self.dict_sock_addr))
+        logging.info("Trying to connect to %d peer(s)" % len(self.dict_sock_addr_try_connect))
+        newly_connected_peers = {}
 
-        for _, sock_addr in self.dict_sock_addr.items():
+        for sock_addr_hash, sock_addr in self.dict_sock_addr_try_connect.items():
             if len(self.connected_peers) >= MAX_PEERS_CONNECTED:
                 break
 
@@ -74,8 +76,13 @@ class Tracker(object):
             logging.debug('Connected to %d/%d peers' % (len(self.connected_peers), MAX_PEERS_CONNECTED))
 
             self.connected_peers[new_peer.__hash__()] = new_peer
+            newly_connected_peers[new_peer.__hash__()] = new_peer
+            self.dict_sock_addr_connected.add(sock_addr_hash)
 
-        self.dict_sock_addr = {}
+        # Remove connected peers
+        self.dict_sock_addr_try_connect = {}
+
+        return newly_connected_peers
 
     def http_scraper(self, torrent, tracker):
         params = {
@@ -93,7 +100,7 @@ class Tracker(object):
             answer_tracker = requests.get(tracker, params=params, timeout=5)
 
             list_peers = bdecode(answer_tracker.content)
-            offset=0
+            offset = 0
             if not type(list_peers['peers']) == dict:
                 '''
                     - Handles bytes form of list of peers
@@ -111,13 +118,13 @@ class Tracker(object):
                     port = struct.unpack_from("!H",list_peers['peers'], offset)[0]
                     offset += 2
                     s = SockAddr(ip,port)
-                    if s.__hash__() not in self.dict_sock_addr.keys():
-                        self.dict_sock_addr[s.__hash__()] = s
+                    if s.__hash__() not in self.dict_sock_addr_connected:
+                        self.dict_sock_addr_try_connect[s.__hash__()] = s
             else:
                 for p in list_peers['peers']:
                     s = SockAddr(p['ip'], p['port'])
-                    if s.__hash__() not in self.dict_sock_addr.keys():
-                        self.dict_sock_addr[s.__hash__()] = s
+                    if s.__hash__() not in self.dict_sock_addr_connected:
+                        self.dict_sock_addr_try_connect[s.__hash__()] = s
 
         except Exception as e:
             logging.exception("HTTP scraping failed: %s" % e.__str__())
@@ -156,10 +163,10 @@ class Tracker(object):
         for ip, port in tracker_announce_output.list_sock_addr:
             sock_addr = SockAddr(ip, port)
 
-            if sock_addr.__hash__() not in self.dict_sock_addr:
-                self.dict_sock_addr[sock_addr.__hash__()] = sock_addr
+            if sock_addr.__hash__() not in self.dict_sock_addr_connected:
+                self.dict_sock_addr_try_connect[sock_addr.__hash__()] = sock_addr
 
-        logging.debug("Got %d peers" % len(self.dict_sock_addr))
+        logging.debug("Got %d peers" % len(self.dict_sock_addr_try_connect))
 
     def send_message(self, conn, sock, tracker_message):
         message = tracker_message.to_bytes()
@@ -188,3 +195,8 @@ class Tracker(object):
 
     def set_pieces_manager(self, pieces_mng):
         self.torrent_pieces = pieces_mng.pieces
+
+    def remove_disconnected_peer(self, peer):
+        sock_addr = SockAddr(peer.ip, peer.port)
+        self.dict_sock_addr_connected.remove(sock_addr.__hash__())
+        del self.connected_peers[sock_addr.__hash__()]

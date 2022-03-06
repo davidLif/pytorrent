@@ -24,7 +24,7 @@ class Run(object):
             self.tracker = tracker.Tracker(self.torrent)
 
             self.pieces_manager = pieces_manager.PiecesManager(self.torrent)
-            self.peers_manager = peers_manager.PeersManager(self.torrent, self.pieces_manager)
+            self.peers_manager = peers_manager.PeersManager(self.torrent, self.pieces_manager, self.tracker)
             self.tracker.set_pieces_manager(self.pieces_manager)
         except Exception as e:
             self.__logger.error("Failed to load torrent_3.torrent", exc_info=e)
@@ -76,7 +76,9 @@ class Run(object):
         # Exit program or continue seeding the file
         try:
             while self.__seed_file_forever:
-                time.sleep(1)
+                time.sleep(5)
+                peers_dict = self.tracker.get_peers_from_trackers()
+                self.peers_manager.add_peers(peers_dict.values())
         except KeyboardInterrupt:
             pass  # Shutdown request
         finally:
