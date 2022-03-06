@@ -20,7 +20,8 @@ class Run(object):
         self.__seed_file_forever = True
 
         try:
-            self.torrent = torrent.Torrent().load_from_path("pycharm-community-2021.2.2.tar.gz.torrent")
+            self.torrent = torrent.Torrent().load_from_path(
+                "torrent_files_and_data/pycharm-community-2021.2.2.tar.gz.torrent")
             self.tracker = tracker.Tracker(self.torrent)
 
             self.pieces_manager = pieces_manager.PiecesManager(self.torrent)

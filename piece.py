@@ -2,6 +2,7 @@ __author__ = 'alexisgallepe'
 
 import hashlib
 import math
+import os.path
 import time
 import logging
 
@@ -101,9 +102,9 @@ class Piece(object):
             length = file["length"]
 
             try:
-                f = open(path_file, 'r+b')  # Already existing file
+                f = open(os.path.join("torrent_files_and_data", path_file), 'r+b')  # Already existing file
             except IOError:
-                f = open(path_file, 'wb')  # New file
+                f = open(os.path.join("torrent_files_and_data", path_file), 'wb')  # New file
             except Exception:
                 logging.exception("Can't write to file")
                 return

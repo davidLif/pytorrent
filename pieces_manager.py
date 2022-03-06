@@ -132,8 +132,7 @@ class PiecesManager(object):
     def try_load_file_from_storage(self):
         file_reader = None
         for piece_for_file in self.files:
-            id_piece = piece_for_file['idPiece']
-            file_path = piece_for_file["path"]
+            file_path = os.path.join("torrent_files_and_data", piece_for_file["path"])
             file_index = piece_for_file["fileOffset"]
 
             if os.path.exists(file_path):
