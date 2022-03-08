@@ -201,6 +201,11 @@ class Peer(object):
         self.read_buffer = self.read_buffer[keep_alive.total_length:]
         return True
 
+    def handle_incoming_data(self):
+        for message in self.get_messages():
+            logging.debug("Received " + str(message))
+            self.process_new_message(message)
+
     def get_messages(self):
         while len(self.read_buffer) > 4 and self.healthy:
             if (not self.has_handshaked and self._handle_handshake()) or self._handle_keep_alive():
@@ -221,3 +226,40 @@ class Peer(object):
                     yield received_message
             except message.WrongMessageException as e:
                 logging.exception(e.__str__())
+
+    def process_new_message(self, new_message: message.Message):
+        if isinstance(new_message, message.Handshake) or isinstance(new_message, message.KeepAlive):
+            logging.error("Handshake or KeepALive should have already been handled")
+
+        elif isinstance(new_message, message.Choke):
+            self.handle_choke()
+
+        elif isinstance(new_message, message.UnChoke):
+            self.handle_unchoke()
+
+        elif isinstance(new_message, message.Interested):
+            self.handle_interested()
+
+        elif isinstance(new_message, message.NotInterested):
+            self.handle_not_interested()
+
+        elif isinstance(new_message, message.Have):
+            self.handle_have(new_message)
+
+        elif isinstance(new_message, message.BitField):
+            self.handle_bitfield(new_message)
+
+        elif isinstance(new_message, message.Request):
+            self.handle_request(new_message)
+
+        elif isinstance(new_message, message.Piece):
+            self.handle_piece(new_message)
+
+        elif isinstance(new_message, message.Cancel):
+            self.handle_cancel()
+
+        elif isinstance(new_message, message.Port):
+            self.handle_port_request()
+
+        else:
+            logging.error("Unknown message")

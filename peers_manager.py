@@ -117,9 +117,7 @@ class PeersManager(Thread):
                 peer.read_buffer += payload
                 logging.debug(peer.read_buffer)
 
-                for message in peer.get_messages():
-                    logging.debug("Received " + str(message))
-                    self._process_new_message(message, peer)
+                peer.handle_incoming_data()
 
     def _do_handshake(self, peer):
         try:
@@ -162,39 +160,4 @@ class PeersManager(Thread):
 
         raise Exception("Peer not present in peer_list")
 
-    def _process_new_message(self, new_message: message.Message, peer: peer.Peer):
-        if isinstance(new_message, message.Handshake) or isinstance(new_message, message.KeepAlive):
-            logging.error("Handshake or KeepALive should have already been handled")
 
-        elif isinstance(new_message, message.Choke):
-            peer.handle_choke()
-
-        elif isinstance(new_message, message.UnChoke):
-            peer.handle_unchoke()
-
-        elif isinstance(new_message, message.Interested):
-            peer.handle_interested()
-
-        elif isinstance(new_message, message.NotInterested):
-            peer.handle_not_interested()
-
-        elif isinstance(new_message, message.Have):
-            peer.handle_have(new_message)
-
-        elif isinstance(new_message, message.BitField):
-            peer.handle_bitfield(new_message)
-
-        elif isinstance(new_message, message.Request):
-            peer.handle_request(new_message)
-
-        elif isinstance(new_message, message.Piece):
-            peer.handle_piece(new_message)
-
-        elif isinstance(new_message, message.Cancel):
-            peer.handle_cancel()
-
-        elif isinstance(new_message, message.Port):
-            peer.handle_port_request()
-
-        else:
-            logging.error("Unknown message")
