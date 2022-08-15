@@ -1,6 +1,7 @@
+import threading
 import time
 
-__author__ = 'alexisgallepe'
+__author__ = 'dl591'
 
 import socket
 import struct
@@ -9,19 +10,23 @@ from pubsub import pub
 import logging
 
 import message
+from bitstring import BitArray
 
 
 class Peer(object):
-    def __init__(self, number_of_pieces, ip, port=6881):
+    def __init__(self, related_torrent_obj, torrent_pieces_array, ip, port=6881):
         self.last_call = 0.0
         self.has_handshaked = False
         self.healthy = False
         self.read_buffer = b''
         self.socket = None
+        self.socket_lock = threading.Lock()
         self.ip = ip
         self.port = port
-        self.number_of_pieces = number_of_pieces
-        self.bit_field = bitstring.BitArray(number_of_pieces)
+        self.torrent_pieces_array = torrent_pieces_array
+        self.related_torrent_obj = related_torrent_obj
+        self.number_of_pieces = int(related_torrent_obj.number_of_pieces)
+        self.bit_field = bitstring.BitArray(self.number_of_pieces)
         self.state = {
             'am_choking': True,
             'am_interested': False,
@@ -40,18 +45,24 @@ class Peer(object):
             self.healthy = True
 
         except Exception as e:
-            print("Failed to connect to peer (ip: %s - port: %s - %s)" % (self.ip, self.port, e.__str__()))
+            logging.warning("Failed to connect to peer (ip: %s - port: %s - %s)" % (self.ip, self.port, e.__str__()))
             return False
 
         return True
 
     def send_to_peer(self, msg):
+        # TODO: Handle socket overload - better!
         try:
+            self.socket_lock.acquire()
+            if time.time() - self.last_call < 0.01:
+                time.sleep(0.01)
             self.socket.send(msg)
             self.last_call = time.time()
         except Exception as e:
             self.healthy = False
-            logging.error("Failed to send to peer : %s" % e.__str__())
+            logging.error("Failed to send to peer : %s" % e.__str__(), exc_info=e)
+        finally:
+            self.socket_lock.release()
 
     def is_eligible(self):
         now = time.time()
@@ -91,7 +102,9 @@ class Peer(object):
         self.state['peer_interested'] = True
 
         if self.am_choking():
+            self.state['am_choking'] = False
             unchoke = message.UnChoke().to_bytes()
+            logging.debug("Sent " + str(message.UnChoke()))
             self.send_to_peer(unchoke)
 
     def handle_not_interested(self):
@@ -107,6 +120,7 @@ class Peer(object):
 
         if self.is_choking() and not self.state['am_interested']:
             interested = message.Interested().to_bytes()
+            logging.debug("Sent " + str(message.Interested()))
             self.send_to_peer(interested)
             self.state['am_interested'] = True
 
@@ -121,6 +135,7 @@ class Peer(object):
 
         if self.is_choking() and not self.state['am_interested']:
             interested = message.Interested().to_bytes()
+            logging.debug("Sent " + str(message.Interested()))
             self.send_to_peer(interested)
             self.state['am_interested'] = True
 
@@ -131,8 +146,8 @@ class Peer(object):
         :type request: message.Request
         """
         logging.debug('handle_request - %s' % self.ip)
-        if self.is_interested() and self.is_unchoked():
-            pub.sendMessage('PiecesManager.PeerRequestsPiece', request=request, peer=self)
+        if self.is_interested() and self.am_unchoking():
+            pub.sendMessage('PeersManager.PeerRequestsPiece', request=request, peer=self)
 
     def handle_piece(self, message):
         """
@@ -152,6 +167,19 @@ class Peer(object):
             self.has_handshaked = True
             self.read_buffer = self.read_buffer[handshake_message.total_length:]
             logging.debug('handle_handshake - %s' % self.ip)
+
+            if handshake_message.info_hash != self.related_torrent_obj.info_hash:
+                raise AssertionError("Handshake info hash is different then"
+                                     " the related torrent object info hash. {} {}".format(
+                    str(handshake_message.info_hash), str(self.related_torrent_obj.info_hash)))
+
+            bit_field_array = BitArray(len(self.torrent_pieces_array))
+            for piece_index in range(len(self.torrent_pieces_array)):
+                piece = self.torrent_pieces_array[piece_index]
+                bit_field_array[piece_index] = piece.is_full
+            self.send_to_peer(message.BitField(bit_field_array).to_bytes())
+            logging.debug("Sent " + str(message.BitField(bit_field_array)))
+
             return True
 
         except Exception:
@@ -173,6 +201,11 @@ class Peer(object):
         self.read_buffer = self.read_buffer[keep_alive.total_length:]
         return True
 
+    def handle_incoming_data(self):
+        for message in self.get_messages():
+            logging.debug("Received " + str(message))
+            self.process_new_message(message)
+
     def get_messages(self):
         while len(self.read_buffer) > 4 and self.healthy:
             if (not self.has_handshaked and self._handle_handshake()) or self._handle_keep_alive():
@@ -193,3 +226,40 @@ class Peer(object):
                     yield received_message
             except message.WrongMessageException as e:
                 logging.exception(e.__str__())
+
+    def process_new_message(self, new_message: message.Message):
+        if isinstance(new_message, message.Handshake) or isinstance(new_message, message.KeepAlive):
+            logging.error("Handshake or KeepALive should have already been handled")
+
+        elif isinstance(new_message, message.Choke):
+            self.handle_choke()
+
+        elif isinstance(new_message, message.UnChoke):
+            self.handle_unchoke()
+
+        elif isinstance(new_message, message.Interested):
+            self.handle_interested()
+
+        elif isinstance(new_message, message.NotInterested):
+            self.handle_not_interested()
+
+        elif isinstance(new_message, message.Have):
+            self.handle_have(new_message)
+
+        elif isinstance(new_message, message.BitField):
+            self.handle_bitfield(new_message)
+
+        elif isinstance(new_message, message.Request):
+            self.handle_request(new_message)
+
+        elif isinstance(new_message, message.Piece):
+            self.handle_piece(new_message)
+
+        elif isinstance(new_message, message.Cancel):
+            self.handle_cancel()
+
+        elif isinstance(new_message, message.Port):
+            self.handle_port_request()
+
+        else:
+            logging.error("Unknown message")

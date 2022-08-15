@@ -2,6 +2,7 @@ __author__ = 'alexisgallepe'
 
 import hashlib
 import math
+import os.path
 import time
 import logging
 
@@ -34,8 +35,17 @@ class Piece(object):
             self.blocks[index].data = data
             self.blocks[index].state = State.FULL
 
+    def set_full_piece(self, data):
+        if len(data) != self.piece_size:
+            raise AssertionError("Calling a set_full_piece with a buffer parameter of the wrong size.")
+
+        for block_index in range(len(self.blocks)):
+            offset = block_index * BLOCK_SIZE
+            block_data = data[offset: offset + BLOCK_SIZE]
+            self.set_block(offset, block_data)
+
     def get_block(self, block_offset, block_length):
-        return self.raw_data[block_offset:block_length]
+        return self.raw_data[block_offset:(block_offset + block_length)]
 
     def get_empty_block(self):
         if self.is_full:
@@ -92,9 +102,9 @@ class Piece(object):
             length = file["length"]
 
             try:
-                f = open(path_file, 'r+b')  # Already existing file
+                f = open(os.path.join("torrent_files_and_data", path_file), 'r+b')  # Already existing file
             except IOError:
-                f = open(path_file, 'wb')  # New file
+                f = open(os.path.join("torrent_files_and_data", path_file), 'wb')  # New file
             except Exception:
                 logging.exception("Can't write to file")
                 return

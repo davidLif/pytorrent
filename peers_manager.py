@@ -15,11 +15,12 @@ import random
 
 
 class PeersManager(Thread):
-    def __init__(self, torrent, pieces_manager):
+    def __init__(self, torrent, pieces_manager, peer_tracker):
         Thread.__init__(self)
         self.peers = []
         self.torrent = torrent
         self.pieces_manager = pieces_manager
+        self.peer_tracker = peer_tracker
         self.rarest_pieces = rarest_piece.RarestPieces(pieces_manager)
         self.pieces_by_peer = [[0, []] for _ in range(pieces_manager.number_of_pieces)]
         self.is_active = True
@@ -34,9 +35,13 @@ class PeersManager(Thread):
 
         piece_index, block_offset, block_length = request.piece_index, request.block_offset, request.block_length
 
+        logging.info("Peer requested piece index {}, block offset {}, block length {}. peer : {}".format(
+            piece_index, block_offset, block_length, peer.ip))
+
         block = self.pieces_manager.get_block(piece_index, block_offset, block_length)
         if block:
-            piece = message.Piece(piece_index, block_offset, block_length, block).to_bytes()
+            piece = message.Piece(block_length, piece_index, block_offset, block).to_bytes()
+            logging.debug("Sent " + str(message.Piece(block_length, piece_index, block_offset, block)))
             peer.send_to_peer(piece)
             logging.info("Sent piece index {} to peer : {}".format(request.piece_index, peer.ip))
 
@@ -83,7 +88,7 @@ class PeersManager(Thread):
             except socket.error as e:
                 err = e.args[0]
                 if err != errno.EAGAIN or err != errno.EWOULDBLOCK:
-                    logging.debug("Wrong errno {}".format(err))
+                    logging.error("Wrong errno {}".format(err))
                 break
             except Exception:
                 logging.exception("Recv failed")
@@ -110,13 +115,14 @@ class PeersManager(Thread):
                     continue
 
                 peer.read_buffer += payload
+                logging.debug(peer.read_buffer)
 
-                for message in peer.get_messages():
-                    self._process_new_message(message, peer)
+                peer.handle_incoming_data()
 
     def _do_handshake(self, peer):
         try:
             handshake = message.Handshake(self.torrent.info_hash)
+            logging.debug("Sent " + str(handshake))
             peer.send_to_peer(handshake.to_bytes())
             logging.info("new peer added : %s" % peer.ip)
             return True
@@ -131,16 +137,17 @@ class PeersManager(Thread):
             if self._do_handshake(peer):
                 self.peers.append(peer)
             else:
-                print("Error _do_handshake")
+                logging.error("Error _do_handshake")
 
     def remove_peer(self, peer):
         if peer in self.peers:
             try:
                 peer.socket.close()
             except Exception:
-                logging.exception("")
+                logging.exception("Falied to close connection on removed peer {}".format(str(peer.ip)))
 
             self.peers.remove(peer)
+            self.peer_tracker.remove_disconnected_peer(peer)
 
         #for rarest_piece in self.rarest_pieces.rarest_pieces:
         #    if peer in rarest_piece["peers"]:
@@ -153,39 +160,4 @@ class PeersManager(Thread):
 
         raise Exception("Peer not present in peer_list")
 
-    def _process_new_message(self, new_message: message.Message, peer: peer.Peer):
-        if isinstance(new_message, message.Handshake) or isinstance(new_message, message.KeepAlive):
-            logging.error("Handshake or KeepALive should have already been handled")
 
-        elif isinstance(new_message, message.Choke):
-            peer.handle_choke()
-
-        elif isinstance(new_message, message.UnChoke):
-            peer.handle_unchoke()
-
-        elif isinstance(new_message, message.Interested):
-            peer.handle_interested()
-
-        elif isinstance(new_message, message.NotInterested):
-            peer.handle_not_interested()
-
-        elif isinstance(new_message, message.Have):
-            peer.handle_have(new_message)
-
-        elif isinstance(new_message, message.BitField):
-            peer.handle_bitfield(new_message)
-
-        elif isinstance(new_message, message.Request):
-            peer.handle_request(new_message)
-
-        elif isinstance(new_message, message.Piece):
-            peer.handle_piece(new_message)
-
-        elif isinstance(new_message, message.Cancel):
-            peer.handle_cancel()
-
-        elif isinstance(new_message, message.Port):
-            peer.handle_port_request()
-
-        else:
-            logging.error("Unknown message")
